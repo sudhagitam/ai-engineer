@@ -23,7 +23,7 @@ chroma_client = chromadb.Client()
 collection = chroma_client.create_collection("pdf_docs")
 
 # Split text helper
-def split_text(text, chunk_size=500, overlap=50):
+def split_text(text, chunk_size=2000, overlap=200):
     chunks = []
     start = 0
     while start < len(text):
