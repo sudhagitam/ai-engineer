@@ -60,3 +60,15 @@ async def ask_question(payload: dict):
 @app.get("/")
 def root():
     return {"status": "PDF Chat API is running"}
+
+    @app.post("/ask-groq")
+async def ask_groq_directly(payload: dict):
+    question = payload.get("question")
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": question}
+        ]
+    )
+    return {"answer": response.choices[0].message.content}
