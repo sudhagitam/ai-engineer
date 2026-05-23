@@ -1,16 +1,13 @@
 import os
 import io
-
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pypdf import PdfReader
 from groq import Groq
 import chromadb
-import io
 
 app = FastAPI()
 
-# Allow Vercel frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,11 +15,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))  # ensure your key is set in env vars
+groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 chroma_client = chromadb.Client()
-collection = chroma_client.create_collection("pdf_docs")
+collection = chroma_client.get_or_create_collection("pdf_docs")
 
-# Split text helper
 def split_text(text, chunk_size=2000, overlap=200):
     chunks = []
     start = 0
@@ -31,9 +27,17 @@ def split_text(text, chunk_size=2000, overlap=200):
         start += chunk_size - overlap
     return chunks
 
+@app.get("/")
+def root():
+    return {"status": "PDF Chat API is running"}
+
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files allowed.")
     contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
     reader = PdfReader(io.BytesIO(contents))
     text = "".join(page.extract_text() for page in reader.pages)
     chunks = split_text(text)
@@ -57,11 +61,7 @@ async def ask_question(payload: dict):
     )
     return {"answer": response.choices[0].message.content}
 
-@app.get("/")
-def root():
-    return {"status": "PDF Chat API is running"}
-
-    @app.post("/ask-groq")
+@app.post("/ask-groq")
 async def ask_groq_directly(payload: dict):
     question = payload.get("question")
     response = groq_client.chat.completions.create(
