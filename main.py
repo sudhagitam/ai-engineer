@@ -19,7 +19,7 @@ groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 chroma_client = chromadb.Client()
 collection = chroma_client.get_or_create_collection("pdf_docs")
 
-def split_text(text, chunk_size=2000, overlap=200):
+def split_text(text, chunk_size=1000, overlap=100):
     chunks = []
     start = 0
     while start < len(text):
@@ -50,25 +50,37 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/ask")
 async def ask_question(payload: dict):
     question = payload.get("question")
+    history = payload.get("history", [])
     results = collection.query(query_texts=[question], n_results=3)
     context = "\n".join(results["documents"][0])
+
+    messages = [
+        {"role": "system", "content": f"Answer based on this PDF context:\n{context}"}
+    ]
+    for msg in history:
+        messages.append(msg)
+    messages.append({"role": "user", "content": question})
+
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": f"Answer based on this context:\n{context}"},
-            {"role": "user", "content": question}
-        ]
+        messages=messages
     )
     return {"answer": response.choices[0].message.content}
 
 @app.post("/ask-groq")
 async def ask_groq_directly(payload: dict):
     question = payload.get("question")
+    history = payload.get("history", [])
+
+    messages = [
+        {"role": "system", "content": "You are a helpful AI assistant."}
+    ]
+    for msg in history:
+        messages.append(msg)
+    messages.append({"role": "user", "content": question})
+
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "You are a helpful AI assistant."},
-            {"role": "user", "content": question}
-        ]
+        messages=messages
     )
     return {"answer": response.choices[0].message.content}
